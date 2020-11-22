@@ -95,16 +95,3 @@ class Button:
 
     def simultaneous_action(self, self2, button):
         print('Simultaneous: {} and {}'.format(self, button))
-
-
-
-
-
-
-if __name__ == '__main__':
-    b = Button(2,2)
-
-    b.press()
-    b.release()
-    b.press()
-    b.release()
