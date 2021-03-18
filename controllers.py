@@ -182,3 +182,75 @@ class LPD8:
     def start_light_thread(self):
         self.light_thread = Thread(target=self.light_loop)
         self.light_thread.start()
+
+class APCMini:
+    light_codes = {'off': 0, 'on': 1, 'blink': 2,
+                    'green': 1, 'blink_green': 2, 
+                    'red': 3, 'blink_red': 4, 
+                    'orange': 5, 'blink_orange': 6}
+    
+    def __init__(self):
+        self.midi_in = rtmidi.MidiIn(name='apc')
+        self.midi_in.open_virtual_port('apc')
+
+        self.midi_out = rtmidi.MidiOut(name='apc')
+        self.midi_out.open_virtual_port('apc')
+
+        self.callbacks = []
+        self.midi_in.set_callback(self.respond)
+
+        # Number attribute here refers to the midi note used for I/O
+        # Grid is indexed left to right, bottom to top
+        # Right column is indexed top to bottom
+        self.grid = [Button(number=i, lit='off') for i in range(64)]
+        self.bottom_row = [Button(number=64 + i, lit='off') for i in range(8)]
+        self.right_column = [Button(number=82 + i, lit='off') for i in range(8)]
+        self.shift = Button(number=98)
+
+        # For 2D indexing, left to right and top to bottom
+        self.grid_columns = [[] for i in range(8)]
+        for i in range(64):
+            self.grid_columns[i % 8].insert(0, self.grid[i])
+
+    def light(self, button, state):
+        "Controls lighting of buttons to the following states: off, green, blink_green, red, blink_red, orange, blink_orange."
+
+        self.send(144, button.number, self.light_codes[state])
+
+
+    def respond(self, data, extra):
+        """
+        Dispatches incoming midi messages and calls any additional callbacks. Designed to be passed to rtmidi as a callback.
+        """
+
+        msg = data[0]
+        if msg[1] >= 0 and msg[1] < 64:
+            if msg[0] == 144:
+                self.grid[msg[1]].press()
+            elif msg[0] == 128:
+                self.grid[msg[1]].release()
+
+        elif msg[1] >= 64 and msg[1] < 72:
+            if msg[0] == 144:
+                self.bottom_row[msg[1] - 64].press()
+            elif msg[0] == 128:
+                self.bottom_row[msg[1] - 64].release()
+
+        elif msg[1] >= 82 and msg[1] < 90:
+            if msg[0] == 144:
+                self.right_column[msg[1] - 82].press()
+            elif msg[0] == 128:
+                self.right_column[msg[1] - 82].release()
+
+        elif msg[1] == 98:
+            if msg[0] == 144:
+                self.shift.press()
+            elif msg[0] == 128:
+                self.shift.release()
+
+
+        for f in self.callbacks:
+            f(msg)
+
+    def send(self, *msg):
+        self.midi_out.send_message(msg)

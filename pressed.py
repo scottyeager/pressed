@@ -50,11 +50,12 @@ class Button:
         if not self.pressed:
             return
 
-        if not (self.hold_time or self.double_time):
-            self.press_action
-            self.pressed = False
-            self.pressed_simultaneous = False
-            return
+        # Wait, doesn't this cause press action to trigger on both press and release in this case? Yeah, it does. Not sure why I thought this was a good idea...?
+        # if not (self.hold_time or self.double_time): 
+        #     self.press_action 
+        #     self.pressed = False
+        #     self.pressed_simultaneous = False
+        #     return
 
         starting_double = self.double_time and not self.pressed_double
 
@@ -68,6 +69,8 @@ class Button:
         if self.double_time and not (self.held or self.pressed_double or self.pressed_simultaneous):
             self.double_timer = Timer(self.double_time, self.press_action)
             self.double_timer.start()
+
+        self.release_action(self) # Only useful when not using any of the fancy stuff, probably, but fire on every release for now
 
         self.held = False
         self.pressed = False
@@ -84,6 +87,9 @@ class Button:
             self.simultaneous_action(self, button)
             self.pressed_simultaneous = True
 
+    # Default actions take a self and second self, because they get passed
+    # self as methods, while assigned functions are not methods and need
+    # to be passed the button to reference stored state.
     def press_action(self, self2):
         print('Pressed: ' + str(self))
 
@@ -95,3 +101,6 @@ class Button:
 
     def simultaneous_action(self, self2, button):
         print('Simultaneous: {} and {}'.format(self, button))
+
+    def release_action(self, self2):
+        print('Released: ' + str(self))
