@@ -56,16 +56,16 @@ class Button:
         #     self.pressed_simultaneous = False
         #     return
 
-        starting_double = self.double_time and not self.pressed_double
+        starting_double = self.double_time and not (self.held or self.pressed_double)
 
         if self.hold_time and self.hold_timer.is_alive():
             # print('canceling hold timer')
             self.hold_timer.cancel()
 
-            if not (starting_double or self.pressed_double):
+            if not (starting_double or self.pressed_double) and self.wait_hold:
                 self.press_action(self)
 
-        if self.double_time and not (self.held or self.pressed_double):
+        if starting_double:
             self.double_timer = Timer(self.double_time, self.press_action)
             self.double_timer.start()
 
