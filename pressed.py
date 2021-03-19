@@ -2,11 +2,10 @@ from threading import Thread, Timer
 
 class Button:
     def __init__(self, hold_time=0, double_time=0, wait_hold=True,
-                simultaneous=False, name=None, number=None, **kwds):
+                name=None, number=None, **kwds):
         self.hold_time = hold_time
         self.double_time = double_time
         self.wait_hold = wait_hold
-        self.simultaneous = simultaneous
         self.name = name
         self.number = number
 
@@ -15,7 +14,6 @@ class Button:
         self.pressed = False
         self.held = False
         self.pressed_double = False
-        self.pressed_simultaneous = False
 
         if self.hold_time:
             self.hold_timer = Thread()
@@ -24,13 +22,13 @@ class Button:
             self.double_timer = Thread()
 
     def __repr__(self):
-        return 'Button({}, {}, {}, {}, {})'.format(self.hold_time, self.double_time, self.simultaneous, self.name, self.number)
+        return 'Button({}, {}, {}, {}, {})'.format(self.hold_time, self.double_time, self.name, self.number)
 
     def press(self):
         if self.pressed: #Some devices send 'down' continually while pressed
             return
 
-        if not (self.hold_time or self.double_time or self.simultaneous):
+        if not (self.hold_time or self.double_time):
             self.press_action(self)
 
         elif self.double_time and self.double_timer.is_alive():
@@ -38,7 +36,8 @@ class Button:
             self.pressed_double = True
             self.double_action(self)
 
-        elif self.hold_time and not self.pressed_double:
+        elif self.hold_time:
+            # wait_hold means don't do press action if hold time is reached
             if not self.wait_hold:
                 self.press_action(self)
             self.hold_timer = Timer(self.hold_time, self.hold)
@@ -59,14 +58,14 @@ class Button:
 
         starting_double = self.double_time and not self.pressed_double
 
-        if self.hold_time and not self.held:
+        if self.hold_time and self.hold_timer.is_alive():
             # print('canceling hold timer')
             self.hold_timer.cancel()
 
             if not (starting_double or self.pressed_double):
                 self.press_action(self)
 
-        if self.double_time and not (self.held or self.pressed_double or self.pressed_simultaneous):
+        if self.double_time and not (self.held or self.pressed_double):
             self.double_timer = Timer(self.double_time, self.press_action)
             self.double_timer.start()
 
@@ -75,17 +74,10 @@ class Button:
         self.held = False
         self.pressed = False
         self.pressed_double = False
-        self.pressed_simultaneous = False
 
     def hold(self):
         self.held = True
         self.hold_action(self)
-
-    def press_simultaneous(self, button):
-        if self.hold_timer.is_alive():
-            self.hold_timer.cancel()
-            self.simultaneous_action(self, button)
-            self.pressed_simultaneous = True
 
     # Default actions take a self and second self, because they get passed
     # self as methods, while assigned functions are not methods and need
@@ -98,9 +90,6 @@ class Button:
 
     def double_action(self, self2):
         print('Double pressed: ' + str(self))
-
-    def simultaneous_action(self, self2, button):
-        print('Simultaneous: {} and {}'.format(self, button))
 
     def release_action(self, self2):
         print('Released: ' + str(self))
