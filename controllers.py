@@ -228,7 +228,7 @@ class APCMini:
         self.callbacks = []
         self.midi_in.set_callback(self.respond)
 
-        self.buttons = APCMiniButtons()
+        self.buttons = APCMiniButtons(self)
         self.grid = self.buttons.grid
         self.bottom_row = self.buttons.bottom_row
         self.right_column = self.buttons.right_column
@@ -236,7 +236,7 @@ class APCMini:
         self.shift = self.buttons.shift
 
         if shifting:
-            self.shifted_buttons = APCMiniButtons()
+            self.shifted_buttons = APCMiniButtons(self)
             self.shifted_grid = self.shifted_buttons.grid
             self.shifted_bottom_row = self.shifted_buttons.bottom_row
             self.shifted_right_column = self.shifted_buttons.right_column
@@ -308,18 +308,41 @@ class APCMini:
         self.midi_out.send_message(msg)
 
 
+class APCMiniButton(Button):
+    def __init__(
+        self,
+        apc,
+        lit="off",
+        hold_time=0,
+        double_time=0,
+        wait_hold=True,
+        name=None,
+        number=None,
+    ):
+        self.apc = apc
+        self.lit = lit
+        super().__init__(hold_time, double_time, wait_hold, name, number)
+
+    def light(self, state):
+        self.apc.light(self, state)
+        self.lit = state
+
+
 class APCMiniButtons:
     """
     Abstract the set of buttons, to duplicate for shift function.
     """
 
-    def __init__(self):
+    def __init__(self, apc):
+        self.apc = apc
         # Number attribute here refers to the midi note used for I/O
         # Grid is indexed left to right, bottom to top
         # Right column is indexed top to bottom
-        self.grid = [Button(number=i, lit="off") for i in range(64)]
-        self.bottom_row = [Button(number=64 + i, lit="off") for i in range(8)]
-        self.right_column = [Button(number=82 + i, lit="off") for i in range(8)]
+        self.grid = [APCMiniButton(apc, number=i) for i in range(64)]
+        self.bottom_row = [APCMiniButton(apc, number=64 + i) for i in range(8)]
+        self.right_column = [APCMiniButton(apc, number=82 + i) for i in range(8)]
+
+        # Shift button has no light, so it's a regular Button
         self.shift = Button(number=98)
 
         # For 2D indexing, left to right and top to bottom
@@ -341,4 +364,3 @@ class APCMiniButtons:
                 raise IndexError
         except:
             raise IndexError from None
-
