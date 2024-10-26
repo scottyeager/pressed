@@ -103,3 +103,25 @@ class Button:
     def release_action(self, self2):
         pass
         # print('Released: ' + str(self))
+
+class Knob:
+    def __init__(self, initial_value=0, name=None, number=None, **kwds):
+        self.value = initial_value
+        self.name = name
+        self.number = number
+
+        self.__dict__.update(kwds)
+
+    def __repr__(self):
+        return "Knob({}, {}, {})".format(
+            self.value, self.name, self.number
+        )
+
+    def update(self, new_value):
+        if self.value != new_value:
+            self.value = new_value
+            self.value_change_action(self)
+
+    def value_change_action(self, self2):
+        pass
+        # print('Value changed: ' + str(self))

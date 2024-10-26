@@ -4,9 +4,9 @@ from evdev import InputDevice, categorize, ecodes as e
 
 # Since this isn't a package yet, support a couple ways of including it
 try:
-    from pressed.pressed import Button
+    from pressed.pressed import Button, Knob
 except ModuleNotFoundError:
-    from pressed import Button
+    from pressed import Button, Knob
 
 
 class Qwerty:
@@ -49,7 +49,7 @@ class Qwerty:
 # dev = InputDevice('/dev/input/by-path/pci-0000:00:14.0-usb-0:1.1:1.0-event-kbd')
 
 # Laptop keyboard
-path = "/dev/input/by-path/platform-i8042-serio-0-event-kbd"
+# path = "/dev/input/by-path/platform-i8042-serio-0-event-kbd"
 
 # Any ol' event
 # dev = InputDevice('/dev/input/event0')
@@ -133,6 +133,7 @@ class LPD8:
 
         self.pads = [Button(name="pad", number=i, lit="off") for i in range(8)]
         self.ccs = [Button(name="cc", number=i, lit="off") for i in range(8)]
+        self.knobs = [Knob(name="knob", number=i) for i in range(8)]
 
         self.midi_root = 36
         self.blink_time = 0.4
@@ -142,7 +143,9 @@ class LPD8:
 
     def respond(self, data, extra):
         msg = data[0]
-        if msg[1] in range(36, 44):
+        if msg[0] == 176 and msg[1] in range(1, 9):  # CC messages for knobs
+            self.knobs[msg[1] - 1].update(msg[2] / 127)
+        elif msg[1] in range(36, 44):
             if msg[0] == 144:
                 self.pads[msg[1] - self.midi_root].press()
             elif msg[0] == 128:
