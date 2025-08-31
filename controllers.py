@@ -238,6 +238,9 @@ class APCMini:
         self.grid_columns = self.buttons.grid_columns
         self.shift = self.buttons.shift
 
+        # Add sliders
+        self.sliders = [Knob(name=f"slider_{i}", number=i) for i in range(9)]
+
         if shifting:
             self.shifted_buttons = APCMiniButtons(self)
             self.shifted_grid = self.shifted_buttons.grid
@@ -268,13 +271,21 @@ class APCMini:
         Dispatches incoming midi messages and calls any additional callbacks. Designed to be passed to rtmidi as a callback.
         """
 
+        msg = data[0]
+
+        # Handle sliders
+        if msg[0] == 176 and msg[1] >= 48 and msg[1] <= 56:
+            self.sliders[msg[1]-48].update(msg[2] / 127)
+            for f in self.callbacks:
+                f(self.sliders[msg[1]-48], msg[2])
+            return
+
         # Check shifting so we can be lazy below and always set shifted
         if self.shifting and self.shifted:
             buttons = self.shifted_buttons
         else:
             buttons = self.buttons
 
-        msg = data[0]
         if msg[1] >= 0 and msg[1] < 64:
             button = buttons.grid[msg[1]]
 
