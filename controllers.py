@@ -1,6 +1,10 @@
-import time, hid, rtmidi
+import time
 from threading import Thread
-from evdev import InputDevice, categorize, ecodes as e
+
+import hid
+import rtmidi
+from evdev import InputDevice, categorize
+from evdev import ecodes as e
 
 # Since this isn't a package yet, support a couple ways of including it
 try:
@@ -215,6 +219,109 @@ class APCMini:
         "blink_orange": 6,
     }
 
+    digit_bitmaps = {
+        0: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ],
+        1: [
+            [0, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0],
+            [0, 1, 0],
+            [0, 1, 0],
+            [0, 1, 0],
+            [0, 1, 0],
+            [1, 1, 1],
+        ],
+        2: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [1, 1, 1],
+            [1, 0, 0],
+            [1, 0, 0],
+            [1, 1, 1],
+        ],
+        3: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [1, 1, 1],
+        ],
+        4: [
+            [0, 0, 0],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+        ],
+        5: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 0, 0],
+            [1, 0, 0],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [1, 1, 1],
+        ],
+        6: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 0, 0],
+            [1, 0, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ],
+        7: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [0, 1, 0],
+            [0, 1, 0],
+            [0, 1, 0],
+            [0, 1, 0],
+        ],
+        8: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ],
+        9: [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 0, 1],
+            [0, 0, 1],
+            [1, 1, 1],
+        ],
+    }
+
     def __init__(self, shifting=False):
         """
         If shifting is True, then we'll create a separate set of buttons and call their actions while the shift key is held down. Otherwise, shift just acts as another button.
@@ -275,9 +382,9 @@ class APCMini:
 
         # Handle sliders
         if msg[0] == 176 and msg[1] >= 48 and msg[1] <= 56:
-            self.sliders[msg[1]-48].update(msg[2] / 127)
+            self.sliders[msg[1] - 48].update(msg[2] / 127)
             for f in self.callbacks:
-                f(self.sliders[msg[1]-48], msg[2])
+                f(self.sliders[msg[1] - 48], msg[2])
             return
 
         # Check shifting so we can be lazy below and always set shifted
@@ -320,6 +427,63 @@ class APCMini:
 
     def send(self, *msg):
         self.midi_out.send_message(msg)
+
+    def render_digits(self, digits):
+        """
+        Render digits on the APC Mini's 8x8 grid.
+        Digits are rendered using the defined bitmaps, but since we only have 8 columns,
+        the first column is only 2 wide (perfect for displaying '1').
+        """
+        if not digits:
+            return
+
+        # Clear the grid first
+        for button in self.buttons.grid:
+            self.light(button, "off")
+
+        # Calculate starting position (right-aligned)
+        total_width = 0
+        for digit in digits:
+            if digit == 1:
+                total_width += 2
+            else:
+                total_width += 3
+
+        start_col = max(0, 8 - total_width)
+        col = start_col
+
+        # Define colors for each digit position
+        colors = ["green", "red", "orange"]
+
+        # Render each digit
+        for i, digit in enumerate(digits):
+            bitmap = self.digit_bitmaps[int(digit)]
+            color = colors[i % 3]
+
+            # Handle special case for digit 1 in leftmost position of 3 digits (compressed)
+            if digit == "1" and len(digits) == 3 and i == 0:
+                for row in range(8):
+                    for bit in range(
+                        2
+                    ):  # Drop rightmost column (only use first 2 bits)
+                        if col + bit < 8 and bitmap[7 - row][bit]:
+                            button_index = row * 8 + (col + bit)
+                            self.light(self.buttons.grid[button_index], color)
+                col += 2
+            else:
+                # All other digits are 3 columns wide
+                for row in range(8):
+                    for bit in range(3):
+                        if col + bit < 8 and bitmap[7 - row][bit]:
+                            button_index = row * 8 + (col + bit)
+                            self.light(self.buttons.grid[button_index], color)
+                col += 3
+
+            # Apparently the APC Mini crashes if we send too many MIDI messages
+            # too fast, under certain circumstances. Turning the lights off
+            # doesn't cause a problem, and turning them all to the same color
+            # doesn't seem to cause a problem
+            time.sleep(0.005)
 
 
 class APCMiniButton(Button):
