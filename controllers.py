@@ -6,9 +6,13 @@ import rtmidi
 from evdev import InputDevice, categorize
 from evdev import ecodes as e
 
-from digit_bitmaps import digit_bitmaps
+# Our "packaging" solution. We can just copy/clone the top level "pressed"
+# folder into our project
+try:
+    from pressed.digit_bitmaps import digit_bitmaps
+except ModuleNotFoundError:
+    from digit_bitmaps import digit_bitmaps
 
-# Since this isn't a package yet, support a couple ways of including it
 try:
     from pressed.pressed import Button, Knob
 except ModuleNotFoundError:
