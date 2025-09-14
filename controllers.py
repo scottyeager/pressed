@@ -237,17 +237,9 @@ class APCMini:
 
         buttons = APCMiniButtons(self)
         self.button_sets = [buttons]
-        self.buttons = None
-        self.activate_button_set(buttons)
-
-        # For simple applications with a single set (and also legacy support),
-        # provide convenient access to the default button set
+        # The activate function expects an existing set to compare with
         self.buttons = buttons
-        self.grid = buttons.grid
-        self.bottom_row = buttons.bottom_row
-        self.right_column = buttons.right_column
-        self.grid_columns = buttons.grid_columns
-        self.shift = buttons.shift
+        self.activate_button_set(buttons)
 
         # Add sliders
         self.sliders = [Knob(name=f"slider_{i}", number=i) for i in range(9)]
@@ -265,6 +257,8 @@ class APCMini:
         except TypeError:
             pass
 
+        old_buttons = self.buttons
+
         # Set all the subgroups on self
         self.buttons = button_set
         self.grid = button_set.grid
@@ -273,13 +267,23 @@ class APCMini:
         self.grid_columns = button_set.grid_columns
         self.shift = button_set.shift
 
-        for button in button_set:
-            self.light(button, button.lit)
+        # We can't relight the buttons until after reassigning them, because we
+        # also check if a button is part of the active set before lighting it
+        for old_button, new_button in zip(old_buttons, button_set):
+            if old_button.lit != new_button.lit:
+                self.light_button(new_button)
 
-    def light(self, button, state):
+    def light(self, number, state):
         "Controls lighting of buttons to the following states: off, green, blink_green, red, blink_red, orange, blink_orange."
+        self.send(144, number, self.light_codes[state])
+
+    def light_button(self, button):
         if button in self.buttons:
-            self.send(144, button.number, self.light_codes[state])
+            self.light(button.number, button.lit)
+
+    def clear_lights(self):
+        for button in self.buttons:
+            self.light(button.number, "off")
 
     def respond(self, data, extra):
         """
@@ -330,7 +334,7 @@ class APCMiniButton(Button):
     def light(self, state):
         if self.number == 98 and state != "off":
             raise ValueError("Cannot light the shift button")
-        self.apc.light(self, state)
+        self.apc.light_button(self)
         self.lit = state
 
 
@@ -394,8 +398,7 @@ class APCMiniButtons:
             return
 
         # Clear the grid first
-        for button in self.grid:
-            button.light("off")
+        self.apc.clear_lights()
 
         # Calculate starting position (right-aligned)
         total_width = 0
