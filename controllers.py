@@ -322,13 +322,7 @@ class APCMini:
         ],
     }
 
-    def __init__(self, shifting=False):
-        """
-        If shifting is True, then we'll create a separate set of buttons and call their actions while the shift key is held down. Otherwise, shift just acts as another button.
-        """
-
-        self.shifting = shifting
-
+    def __init__(self):
         self.midi_in = rtmidi.MidiIn(name="apc")
         self.midi_in.open_virtual_port("apc")
 
@@ -338,40 +332,43 @@ class APCMini:
         self.callbacks = []
         self.midi_in.set_callback(self.respond)
 
-        self.buttons = APCMiniButtons(self)
-        self.grid = self.buttons.grid
-        self.bottom_row = self.buttons.bottom_row
-        self.right_column = self.buttons.right_column
-        self.grid_columns = self.buttons.grid_columns
-        self.shift = self.buttons.shift
+        buttons = ButtonSet(self)
+        self.button_sets = [buttons]
+        self.buttons = None
+        self.activate_button_set(buttons)
+
+        # For simple applications with a single set (and also legacy support),
+        # provide convenient access to the default button set
+        self.buttons = buttons
+        self.grid = buttons.grid
+        self.bottom_row = buttons.bottom_row
+        self.right_column = buttons.right_column
+        self.grid_columns = buttons.grid_columns
+        self.shift = buttons.shift
 
         # Add sliders
         self.sliders = [Knob(name=f"slider_{i}", number=i) for i in range(9)]
 
-        if shifting:
-            self.shifted_buttons = APCMiniButtons(self)
-            self.shifted_grid = self.shifted_buttons.grid
-            self.shifted_bottom_row = self.shifted_buttons.bottom_row
-            self.shifted_right_column = self.shifted_buttons.right_column
-            self.shifted_grid_columns = self.shifted_buttons.grid_columns
+    def activate_button_set(self, button_set):
+        # Set all the subgroups on self
+        self.buttons = button_set
+        self.grid = button_set.grid
+        self.bottom_row = button_set.bottom_row
+        self.right_column = button_set.right_column
+        self.grid_columns = button_set.grid_columns
+        self.shift = button_set.shift
 
-            # Just need one shift button, not attached to other sets
-            del self.buttons.shift
-            del self.shifted_buttons.shift
-            self.shift = Button(number=98)
+        # Turn all lights off first to avoid ghost lights from previous set
+        for i in range(89):
+            self.send(144, i, self.light_codes["off"])
+        for button in button_set:
+            if hasattr(button, "lit"):
+                self.light(button, button.lit)
 
     def light(self, button, state):
         "Controls lighting of buttons to the following states: off, green, blink_green, red, blink_red, orange, blink_orange."
 
-        button.lit = state
         self.send(144, button.number, self.light_codes[state])
-
-    def relight(self, buttons):
-        """
-        For shifting, to reset all lights to saved states
-        """
-        for b in buttons:
-            self.send(144, b.number, self.light_codes[b.lit])
 
     def respond(self, data, extra):
         """
@@ -387,103 +384,21 @@ class APCMini:
                 f(self.sliders[msg[1] - 48], msg[2])
             return
 
-        # Check shifting so we can be lazy below and always set shifted
-        if self.shifting and self.shifted:
-            buttons = self.shifted_buttons
-        else:
-            buttons = self.buttons
-
-        if msg[1] >= 0 and msg[1] < 64:
-            button = buttons.grid[msg[1]]
-
-        elif msg[1] >= 64 and msg[1] < 72:
-            button = buttons.bottom_row[msg[1] - 64]
-
-        elif msg[1] >= 82 and msg[1] < 90:
-            button = buttons.right_column[msg[1] - 82]
-
-        elif msg[1] == 98:
-            button = self.shift
-            if self.shifting:
-                if msg[0] == 144:
-                    self.shifted = True
-                    self.relight(self.shifted_buttons)
-                elif msg[0] == 128:
-                    self.shifted = False
-                    self.relight(self.buttons)
+        try:
+            button = self.buttons[msg[1]]
+        except IndexError:
+            return  # Ignore button presses that are not in the active set
 
         if msg[0] == 144:
             button.press()
         elif msg[0] == 128:
             button.release()
 
-        if self.shifting and self.shifted:
-            callbacks = self.shifted_callbacks
-        else:
-            callbacks = self.callbacks
-
-        for f in callbacks:
+        for f in self.callbacks:
             f(button, {144: True, 128: False}[msg[0]])
 
     def send(self, *msg):
         self.midi_out.send_message(msg)
-
-    def render_digits(self, digits):
-        """
-        Render digits on the APC Mini's 8x8 grid.
-        Digits are rendered using the defined bitmaps, but since we only have 8 columns,
-        the first column is only 2 wide (perfect for displaying '1').
-        """
-        if not digits:
-            return
-
-        # Clear the grid first
-        for button in self.buttons.grid:
-            self.light(button, "off")
-
-        # Calculate starting position (right-aligned)
-        total_width = 0
-        for digit in digits:
-            if digit == 1:
-                total_width += 2
-            else:
-                total_width += 3
-
-        start_col = max(0, 8 - total_width)
-        col = start_col
-
-        # Define colors for each digit position
-        colors = ["green", "red", "orange"]
-
-        # Render each digit
-        for i, digit in enumerate(digits):
-            bitmap = self.digit_bitmaps[int(digit)]
-            color = colors[i % 3]
-
-            # Handle special case for digit 1 in leftmost position of 3 digits (compressed)
-            if digit == "1" and len(digits) == 3 and i == 0:
-                for row in range(8):
-                    for bit in range(
-                        2
-                    ):  # Drop rightmost column (only use first 2 bits)
-                        if col + bit < 8 and bitmap[7 - row][bit]:
-                            button_index = row * 8 + (col + bit)
-                            self.light(self.buttons.grid[button_index], color)
-                col += 2
-            else:
-                # All other digits are 3 columns wide
-                for row in range(8):
-                    for bit in range(3):
-                        if col + bit < 8 and bitmap[7 - row][bit]:
-                            button_index = row * 8 + (col + bit)
-                            self.light(self.buttons.grid[button_index], color)
-                col += 3
-
-            # Apparently the APC Mini crashes if we send too many MIDI messages
-            # too fast, under certain circumstances. Turning the lights off
-            # doesn't cause a problem, and turning them all to the same color
-            # doesn't seem to cause a problem
-            time.sleep(0.005)
 
 
 class APCMiniButton(Button):
@@ -506,22 +421,26 @@ class APCMiniButton(Button):
         self.lit = state
 
 
-class APCMiniButtons:
+class ButtonSet:
     """
     Abstract the set of buttons, to duplicate for shift function.
     """
 
-    def __init__(self, apc):
+    def __init__(self, apc, grid=None, bottom_row=None, right_column=None, shift=None):
         self.apc = apc
         # Number attribute here refers to the midi note used for I/O
         # Grid is indexed left to right, bottom to top
         # Right column is indexed top to bottom
-        self.grid = [APCMiniButton(apc, number=i) for i in range(64)]
-        self.bottom_row = [APCMiniButton(apc, number=64 + i) for i in range(8)]
-        self.right_column = [APCMiniButton(apc, number=82 + i) for i in range(8)]
+        self.grid = grid or [APCMiniButton(apc, number=i) for i in range(64)]
+        self.bottom_row = bottom_row or [
+            APCMiniButton(apc, number=64 + i) for i in range(8)
+        ]
+        self.right_column = right_column or [
+            APCMiniButton(apc, number=82 + i) for i in range(8)
+        ]
 
         # Shift button has no light, so it's a regular Button
-        self.shift = Button(number=98)
+        self.shift = shift or Button(number=98)
 
         # For 2D indexing, left to right and top to bottom
         self.grid_columns = [[] for i in range(8)]
@@ -542,3 +461,70 @@ class APCMiniButtons:
                 raise IndexError
         except:
             raise IndexError from None
+
+    def __iter__(self):
+        """Iterate over all buttons in this set."""
+        for button in self.grid:
+            yield button
+        for button in self.bottom_row:
+            yield button
+        for button in self.right_column:
+            yield button
+        yield self.shift
+
+    def render_digits(self, digits):
+        """
+        Render digits on the APC Mini's 8x8 grid.
+        Digits are rendered using the defined bitmaps, but since we only have 8 columns,
+        the first column is only 2 wide (perfect for displaying '1').
+        """
+        if not digits:
+            return
+
+        # Clear the grid first
+        for button in self.grid:
+            self.apc.light(button, "off")
+
+        # Calculate starting position (right-aligned)
+        total_width = 0
+        for digit in digits:
+            if digit == 1:
+                total_width += 2
+            else:
+                total_width += 3
+
+        start_col = max(0, 8 - total_width)
+        col = start_col
+
+        # Define colors for each digit position
+        colors = ["green", "red", "orange"]
+
+        # Render each digit
+        for i, digit in enumerate(digits):
+            bitmap = self.apc.digit_bitmaps[int(digit)]
+            color = colors[i % 3]
+
+            # Handle special case for digit 1 in leftmost position of 3 digits (compressed)
+            if digit == "1" and len(digits) == 3 and i == 0:
+                for row in range(8):
+                    for bit in range(
+                        2
+                    ):  # Drop rightmost column (only use first 2 bits)
+                        if col + bit < 8 and bitmap[7 - row][bit]:
+                            button_index = row * 8 + (col + bit)
+                            self.apc.light(self.grid[button_index], color)
+                col += 2
+            else:
+                # All other digits are 3 columns wide
+                for row in range(8):
+                    for bit in range(3):
+                        if col + bit < 8 and bitmap[7 - row][bit]:
+                            button_index = row * 8 + (col + bit)
+                            self.apc.light(self.grid[button_index], color)
+                col += 3
+
+            # Apparently the APC Mini crashes if we send too many MIDI messages
+            # too fast, under certain circumstances. Turning the lights off
+            # doesn't cause a problem, and turning them all to the same color
+            # doesn't seem to cause a problem
+            time.sleep(0.005)
