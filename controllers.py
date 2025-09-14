@@ -6,6 +6,8 @@ import rtmidi
 from evdev import InputDevice, categorize
 from evdev import ecodes as e
 
+from digit_bitmaps import digit_bitmaps
+
 # Since this isn't a package yet, support a couple ways of including it
 try:
     from pressed.pressed import Button, Knob
@@ -219,109 +221,6 @@ class APCMini:
         "blink_orange": 6,
     }
 
-    digit_bitmaps = {
-        0: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ],
-        1: [
-            [0, 0, 0],
-            [0, 1, 0],
-            [1, 1, 0],
-            [0, 1, 0],
-            [0, 1, 0],
-            [0, 1, 0],
-            [0, 1, 0],
-            [1, 1, 1],
-        ],
-        2: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [1, 1, 1],
-            [1, 0, 0],
-            [1, 0, 0],
-            [1, 1, 1],
-        ],
-        3: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [1, 1, 1],
-        ],
-        4: [
-            [0, 0, 0],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-        ],
-        5: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [1, 0, 0],
-            [1, 0, 0],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [1, 1, 1],
-        ],
-        6: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [1, 0, 0],
-            [1, 0, 0],
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ],
-        7: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 1, 0],
-            [0, 1, 0],
-            [0, 1, 0],
-        ],
-        8: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ],
-        9: [
-            [0, 0, 0],
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-            [0, 0, 1],
-            [0, 0, 1],
-            [1, 1, 1],
-        ],
-    }
-
     def __init__(self):
         self.midi_in = rtmidi.MidiIn(name="apc")
         self.midi_in.open_virtual_port("apc")
@@ -349,7 +248,19 @@ class APCMini:
         # Add sliders
         self.sliders = [Knob(name=f"slider_{i}", number=i) for i in range(9)]
 
+    def new_button_set(self, **kwargs):
+        button_set = ButtonSet(self, **kwargs)
+        self.button_sets.append(button_set)
+        return button_set
+
     def activate_button_set(self, button_set):
+        # If button_set is an int, use as an index to our list of sets
+        # Otherwise, we assume it's a set of buttons
+        try:
+            button_set = self.button_sets[button_set]
+        except TypeError:
+            pass
+
         # Set all the subgroups on self
         self.buttons = button_set
         self.grid = button_set.grid
@@ -363,8 +274,8 @@ class APCMini:
 
     def light(self, button, state):
         "Controls lighting of buttons to the following states: off, green, blink_green, red, blink_red, orange, blink_orange."
-
-        self.send(144, button.number, self.light_codes[state])
+        if button in self.buttons:
+            self.send(144, button.number, self.light_codes[state])
 
     def respond(self, data, extra):
         """
@@ -413,7 +324,7 @@ class APCMiniButton(Button):
         super().__init__(hold_time, double_time, wait_hold, name, number)
 
     def light(self, state):
-        if self.number == 98:
+        if self.number == 98 and state != "off":
             raise ValueError("Cannot light the shift button")
         self.apc.light(self, state)
         self.lit = state
@@ -480,7 +391,7 @@ class ButtonSet:
 
         # Clear the grid first
         for button in self.grid:
-            self.apc.light(button, "off")
+            button.light("off")
 
         # Calculate starting position (right-aligned)
         total_width = 0
@@ -498,7 +409,7 @@ class ButtonSet:
 
         # Render each digit
         for i, digit in enumerate(digits):
-            bitmap = self.apc.digit_bitmaps[int(digit)]
+            bitmap = digit_bitmaps[int(digit)]
             color = colors[i % 3]
 
             # Handle special case for digit 1 in leftmost position of 3 digits (compressed)
@@ -509,7 +420,7 @@ class ButtonSet:
                     ):  # Drop rightmost column (only use first 2 bits)
                         if col + bit < 8 and bitmap[7 - row][bit]:
                             button_index = row * 8 + (col + bit)
-                            self.apc.light(self.grid[button_index], color)
+                            self.grid[button_index].light(color)
                 col += 2
             else:
                 # All other digits are 3 columns wide
@@ -517,7 +428,7 @@ class ButtonSet:
                     for bit in range(3):
                         if col + bit < 8 and bitmap[7 - row][bit]:
                             button_index = row * 8 + (col + bit)
-                            self.apc.light(self.grid[button_index], color)
+                            self.grid[button_index].light(color)
                 col += 3
 
             # Apparently the APC Mini crashes if we send too many MIDI messages
