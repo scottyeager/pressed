@@ -231,7 +231,7 @@ class APCMini:
         self.callbacks = []
         self.midi_in.set_callback(self.respond)
 
-        buttons = ButtonSet(self)
+        buttons = APCMiniButtons(self)
         self.button_sets = [buttons]
         self.buttons = None
         self.activate_button_set(buttons)
@@ -248,8 +248,8 @@ class APCMini:
         # Add sliders
         self.sliders = [Knob(name=f"slider_{i}", number=i) for i in range(9)]
 
-    def new_button_set(self, **kwargs):
-        button_set = ButtonSet(self, **kwargs)
+    def add_button_set(self, **kwargs):
+        button_set = APCMiniButtons(self, **kwargs)
         self.button_sets.append(button_set)
         return button_set
 
@@ -330,9 +330,9 @@ class APCMiniButton(Button):
         self.lit = state
 
 
-class ButtonSet:
+class APCMiniButtons:
     """
-    Abstract the set of buttons, to duplicate for shift function.
+    Abstract the set of buttons, to allow multiple "screens" with independent button actions and lighting states
     """
 
     def __init__(self, apc, grid=None, bottom_row=None, right_column=None, shift=None):
