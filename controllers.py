@@ -358,12 +358,8 @@ class APCMini:
         self.grid_columns = button_set.grid_columns
         self.shift = button_set.shift
 
-        # Turn all lights off first to avoid ghost lights from previous set
-        for i in range(89):
-            self.send(144, i, self.light_codes["off"])
         for button in button_set:
-            if hasattr(button, "lit"):
-                self.light(button, button.lit)
+            self.light(button, button.lit)
 
     def light(self, button, state):
         "Controls lighting of buttons to the following states: off, green, blink_green, red, blink_red, orange, blink_orange."
@@ -417,6 +413,8 @@ class APCMiniButton(Button):
         super().__init__(hold_time, double_time, wait_hold, name, number)
 
     def light(self, state):
+        if self.number == 98:
+            raise ValueError("Cannot light the shift button")
         self.apc.light(self, state)
         self.lit = state
 
@@ -439,8 +437,7 @@ class ButtonSet:
             APCMiniButton(apc, number=82 + i) for i in range(8)
         ]
 
-        # Shift button has no light, so it's a regular Button
-        self.shift = shift or Button(number=98)
+        self.shift = shift or APCMiniButton(apc, number=98)
 
         # For 2D indexing, left to right and top to bottom
         self.grid_columns = [[] for i in range(8)]
