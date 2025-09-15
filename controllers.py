@@ -334,8 +334,8 @@ class APCMiniButton(Button):
     def light(self, state):
         if self.number == 98 and state != "off":
             raise ValueError("Cannot light the shift button")
-        self.apc.light_button(self)
         self.lit = state
+        self.apc.light_button(self)
 
 
 class APCMiniButtons:
