@@ -302,15 +302,16 @@ class APCMini:
                 f(self.sliders[msg[1] - 48], msg[2])
             return
 
-        try:
-            button = self.buttons[msg[1]]
-        except IndexError:
-            return  # Ignore button presses that are not in the active set
-
         if msg[0] == 144:
+            button = self.buttons[msg[1]]
             button.press()
         elif msg[0] == 128:
-            button.release()
+            # On release, we need to trigger all sets, because a press might
+            # have switched the button set. Releasing an inactive button
+            # shouldn't have any bad effects (I hope!)
+            for set in self.button_sets:
+                button = set[msg[1]]
+                button.release()
 
         for f in self.callbacks:
             f(button, {144: True, 128: False}[msg[0]])
