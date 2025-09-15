@@ -288,6 +288,13 @@ class APCMini:
         # Sending a large amount of MIDI events to the APC Mini will cause it to ignore future events for a while.
         time.sleep(0.005)
 
+    def clear_lights_grid(self):
+        for button in self.grid:
+            self.light(button.number, "off")
+
+        # Sending a large amount of MIDI events to the APC Mini will cause it to ignore future events for a while.
+        time.sleep(0.005)
+
     def respond(self, data, extra):
         """
         Dispatches incoming midi messages and calls any additional callbacks. Designed to be passed to rtmidi as a callback.
@@ -402,7 +409,7 @@ class APCMiniButtons:
             return
 
         # Clear the grid first
-        self.apc.clear_lights()
+        self.apc.clear_lights_grid()
 
         start_col = max(0, 8 - (len(digits) * 3))
         col = start_col
