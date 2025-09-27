@@ -1,0 +1,18 @@
+[project]
+name = "pressed"
+version = "0.1.0"
+description = "Python library for handling buttons"
+readme = "README.md"
+authors = [
+    { name = "Scott Yeager", email = "yeagersm@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "evdev==1.9.2",
+    "hid==1.0.8",
+    "python-rtmidi==1.5.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.7.8,<0.8"]
+build-backend = "uv_build"
