@@ -217,11 +217,11 @@ class APCMini:
     }
 
     def __init__(self):
-        self.midi_in = rtmidi.MidiIn(name="apc")
-        self.midi_in.open_virtual_port("apc")
+        self.midi_in = rtmidi.MidiIn(name="apc_input")
+        self.midi_in.open_virtual_port("apc_input")
 
-        self.midi_out = rtmidi.MidiOut(name="apc")
-        self.midi_out.open_virtual_port("apc")
+        self.midi_out = rtmidi.MidiOut(name="apc_output")
+        self.midi_out.open_virtual_port("apc_output")
 
         self.callbacks = []
         self.midi_in.set_callback(self.respond)
