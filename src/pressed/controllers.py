@@ -400,7 +400,8 @@ class APCMiniButtons:
             return
 
         # Clear the grid first
-        self.apc.clear_lights_grid()
+        for button in self.grid:
+            button.light("off")
 
         start_col = max(0, 8 - (len(digits) * 3))
         col = start_col
